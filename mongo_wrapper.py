@@ -30,6 +30,34 @@ class MongoDBWrapper:
         result = self.collection.insert_one(metadata)
         return str(result.inserted_id)  # Return the ID of the inserted document
 
+    def get_video_metadata(self, cid):
+        """Retrieve video metadata by CID."""
+        return self.collection.find_one({"cid": cid})
+
+    def increment_view_count(self, cid):
+        """Increment the view count for a video by CID."""
+        result = self.collection.update_one({"cid": cid}, {"$inc": {"view_count": 1}})
+        if result.matched_count < 1:
+            raise ValueError(f"No document found with CID: {cid}")
+        views = self.collection.find_one({"cid": cid})
+        return views
+
+    def increment_like_count(self, cid):
+        """Increment the like count for a video by CID."""
+        result = self.collection.update_one({"cid": cid}, {"$inc": {"like_count": 1}})
+        if result.matched_count < 1:
+            raise ValueError(f"No document found with CID: {cid}")
+        likes = self.collection.find_one({"cid": cid})
+        return likes
+
+    def decrement_like_count(self, cid):
+        """Decrement the like count for a video by CID (ensuring it doesn't go below zero)."""
+        result = self.collection.update_one({"cid": cid, "like_count": {"$gt": 0}}, {"$inc": {"like_count": -1}})
+        if result.matched_count < 1:
+            raise ValueError(f"No document found with CID: {cid}")
+        likes = self.collection.find_one({"cid": cid})
+        return likes
+
     def add_comment(self, video_cid, user_id, comment_text, profile_pic_url, parent_comment_id=None):
         """Add a comment to a video, with optional nesting (replies to other comments)."""
         comment = {
@@ -73,22 +101,12 @@ class MongoDBWrapper:
         """Retrieve video metadata by video_cid."""
         return self.collection.find_one({"video_cid": video_cid})
 
-    def list_all_videos(self, user_id=None):
-        """List all videos, optionally filtered by user_id."""
+    def list_all_videos(self, user_id=None, skip=0, limit=10):
+        """List all videos with optional pagination, optionally filtered by user_id."""
         query = {"user_id": user_id} if user_id else {}
-        return list(self.collection.find(query))
+        return list(self.collection.find(query).skip(skip).limit(limit))
 
-    def increment_view_count(self, video_cid):
-        """Increment the view count for a video by video_cid."""
-        result = self.collection.update_one({"video_cid": video_cid}, {"$inc": {"view_count": 1}})
-        return result.modified_count > 0  # Return True if update was successful
-
-    def increment_like_count(self, video_cid):
-        """Increment the like count for a video by video_cid."""
-        result = self.collection.update_one({"video_cid": video_cid}, {"$inc": {"like_count": 1}})
-        return result.modified_count > 0  # Return True if update was successful
-
-    def decrement_like_count(self, video_cid):
-        """Decrement the like count for a video by video_cid (ensuring it doesn't go below zero)."""
-        result = self.collection.update_one({"video_cid": video_cid, "like_count": {"$gt": 0}}, {"$inc": {"like_count": -1}})
-        return result.modified_count > 0
+    def count_videos(self, user_id=None):
+        """Count the number of videos, optionally filtered by user_id."""
+        query = {"user_id": user_id} if user_id else {}
+        return self.collection.count_documents(query)
