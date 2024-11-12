@@ -1,0 +1,61 @@
+# Node.js dependencies
+node_modules/
+
+# Hardhat build artifacts and cache
+artifacts/
+cache/
+
+# Hardhat configuration files
+*.log
+
+# Environment variables
+.env
+backend/.env
+
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Python virtual environments
+venv/
+env/
+
+# IPFS data (if any local data is stored)
+.ipfs/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Solidity coverage reports
+coverage/
+
+# Frontend build artifacts
+frontend/build/
+frontend/node_modules/
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# MacOS Finder attributes
+.DS_Store
+
+# Ethereum secret keys (just in case)
+*.secret
+*.pem
+*.key
+
+# NPM debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional: Ignore test coverage files
+coverage.json
+coverage-final.json
