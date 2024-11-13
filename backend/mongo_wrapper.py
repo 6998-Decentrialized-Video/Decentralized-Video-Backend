@@ -1,10 +1,12 @@
+import os
 from pymongo import MongoClient
 from bson import ObjectId
 from datetime import datetime
 
 class MongoDBWrapper:
-    def __init__(self, db_name="video_platform", collection_name="videos",  uri="mongodb+srv://zz2915:drdlMkeyyYHupBXz@videodata.vtrh4.mongodb.net/?retryWrites=true&w=majority&appName=videodata"):
-        # Initialize MongoDB connection
+    def __init__(self, db_name="video_platform", collection_name="videos"):
+        uri = os.getenv("MONGODB_URI")
+        print(uri)
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
@@ -30,40 +32,39 @@ class MongoDBWrapper:
         result = self.collection.insert_one(metadata)
         return str(result.inserted_id)  # Return the ID of the inserted document
 
-    def get_video_metadata(self, cid):
-        """Retrieve video metadata by CID."""
-        return self.collection.find_one({"cid": cid})
-
-    def increment_view_count(self, cid):
+    def increment_view_count(self, video_cid):
         """Increment the view count for a video by CID."""
-        result = self.collection.update_one({"cid": cid}, {"$inc": {"view_count": 1}})
+        result = self.collection.update_one({"video_cid": video_cid}, {"$inc": {"view_count": 1}})
         if result.matched_count < 1:
-            raise ValueError(f"No document found with CID: {cid}")
-        views = self.collection.find_one({"cid": cid})
-        return views
+            raise ValueError(f"No document found with video_cid: {video_cid}")
+        views = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "view_count": 1})
+        return views.get("view_count", 0)
 
-    def increment_like_count(self, cid):
+    def increment_like_count(self, video_cid):
         """Increment the like count for a video by CID."""
-        result = self.collection.update_one({"cid": cid}, {"$inc": {"like_count": 1}})
+        result = self.collection.update_one({"video_cid": video_cid}, {"$inc": {"like_count": 1}})
         if result.matched_count < 1:
-            raise ValueError(f"No document found with CID: {cid}")
-        likes = self.collection.find_one({"cid": cid})
-        return likes
+            raise ValueError(f"No document found with video_cid: {video_cid}")
+        likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
+        return likes.get("like_count", 0)
 
-    def decrement_like_count(self, cid):
+    def decrement_like_count(self, video_cid):
         """Decrement the like count for a video by CID (ensuring it doesn't go below zero)."""
-        result = self.collection.update_one({"cid": cid, "like_count": {"$gt": 0}}, {"$inc": {"like_count": -1}})
+        result = self.collection.update_one(
+            {"video_cid": video_cid, "like_count": {"$gt": 0}},
+            {"$inc": {"like_count": -1}}
+        )
         if result.matched_count < 1:
-            raise ValueError(f"No document found with CID: {cid}")
-        likes = self.collection.find_one({"cid": cid})
-        return likes
+            raise ValueError(f"No document found with video_cid: {video_cid}")
+        likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
+        return likes.get("like_count", 0)
 
     def add_comment(self, video_cid, user_id, comment_text, profile_pic_url, parent_comment_id=None):
         """Add a comment to a video, with optional nesting (replies to other comments)."""
         comment = {
             "_id": ObjectId(),  # Unique identifier for the comment
             "user_id": user_id,
-            "profile_pic_url": profile_pic_url,  # Commenter's profile picture URL from coinbase 
+            "profile_pic_url": profile_pic_url,  # Commenter's profile picture URL from Coinbase 
             "comment": comment_text,
             "timestamp": datetime.now(),
             "replies": []  # Initialize empty list for replies

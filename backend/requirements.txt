@@ -1,0 +1,6 @@
+requests==2.32.0
+web3==6.5.0
+Flask==2.3.2
+pymongo==4.5.0
+python-dotenv==1.0.0
+opencv-python==4.8.0.76
