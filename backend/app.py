@@ -3,9 +3,13 @@ import os
 import requests
 import json
 from flask import Flask, request, jsonify, redirect, url_for, session
+from flask_cors import CORS
+
 from web3 import Web3
 
 from mongo_wrapper import MongoDBWrapper
+
+
 
 def load_env_vars(file_path='.env.local'):
     """Load environment variables from a file."""
@@ -19,6 +23,8 @@ load_env_vars()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
+CORS(app, origins=["http://localhost:3000"])
+
 
 # WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER_URI")
 # web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
@@ -30,15 +36,21 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY")
 COINBASE_REDIRECT_URI = "http://localhost:8000/auth/callback"
 COINBASE_CLIENT_ID = os.getenv("COINBASE_CLIENT_ID")
 COINBASE_CLIENT_SECRET = os.getenv("COINBASE_CLIENT_SECRET")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 mongo = MongoDBWrapper()
 
+
+
 @app.route('/loginCoinbase', methods=['POST'])
 def login_coinbase():
-    return redirect(f"https://www.coinbase.com/oauth/authorize"
-                    f"?response_type=code&"
-                    f"client_id={COINBASE_CLIENT_ID}&"
-                    f"redirect_uri={COINBASE_REDIRECT_URI}&scope=wallet:user:read")
+    coinbase_url = (
+        f"https://www.coinbase.com/oauth/authorize"
+        f"?response_type=code&"
+        f"client_id={COINBASE_CLIENT_ID}&"
+        f"redirect_uri={COINBASE_REDIRECT_URI}&scope=wallet:user:read"
+    )
+    return {"url": coinbase_url}
 
 @app.route('/auth/callback', methods=['GET'])
 def coinbase_callback():
@@ -73,7 +85,10 @@ def coinbase_callback():
 
         session['coinbase_user'] = user_info['data']
 
-        return jsonify({'message': 'Login successful', 'user': user_info['data']}), 200
+        redirect_url = f"{FRONTEND_URL}/home?token={access_token}"
+        return redirect(redirect_url)
+
+        # return jsonify({'message': 'Login successful', 'user': user_info['data']}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 @app.route('/upload', methods=['POST'])
