@@ -1,39 +1,40 @@
-import math
 import os
-import requests
 import json
+import requests
 from flask import Flask, request, jsonify, redirect, url_for, session
 from web3 import Web3
 
 from mongo_wrapper import MongoDBWrapper
 
-def load_env_vars(file_path='.env.local'):
-    """Load environment variables from a file."""
-    with open(file_path, 'r') as file:
-        for line in file:
-            if line.strip() and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                os.environ[key] = value
+from dotenv import load_dotenv
 
-load_env_vars()
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
-# WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER_URI")
-# web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
+# Initialize Web3
+WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER_URI")
+web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
 
-# CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
-# CONTRACT_ABI = json.loads(os.getenv('CONTRACT_ABI'))
-# contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
+# Load Contract ABI
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+with open('contract_abi.json', 'r') as abi_file:
+    CONTRACT_ABI = json.load(abi_file)
+contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
 
-COINBASE_REDIRECT_URI = "http://localhost:8000/auth/callback"
+# Set up account
+PRIVATE_KEY = os.getenv("PRIVATE_KEY")
+account = web3.eth.account.from_key(PRIVATE_KEY)
+
+# Coinbase OAuth configuration
+COINBASE_REDIRECT_URI = os.getenv("COINBASE_REDIRECT_URI")
 COINBASE_CLIENT_ID = os.getenv("COINBASE_CLIENT_ID")
 COINBASE_CLIENT_SECRET = os.getenv("COINBASE_CLIENT_SECRET")
 
 mongo = MongoDBWrapper()
 
-@app.route('/loginCoinbase', methods=['POST'])
+@app.route('/loginCoinbase', methods=['GET'])
 def login_coinbase():
     return redirect(f"https://www.coinbase.com/oauth/authorize"
                     f"?response_type=code&"
@@ -76,6 +77,7 @@ def coinbase_callback():
         return jsonify({'message': 'Login successful', 'user': user_info['data']}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 @app.route('/upload', methods=['POST'])
 def upload_video():
     if 'coinbase_user' not in session:
@@ -84,29 +86,48 @@ def upload_video():
         data = request.get_json()
         title = data.get('title')
         description = data.get('description')
-        ipfs_hash = data.get('ipfs_hash') # from front end
+        ipfs_hash = data.get('ipfs_hash')  # From front end
         file_name = data.get('file_name')
-        tags = data.get('tags')
+        tags = data.get('tags', [])
+        profile_pic_url = session['coinbase_user'].get('avatar_url', '')
+        user_id = session['coinbase_user']['id']
+
+        # Add video metadata to MongoDB
         mongo.add_video_metadata(
-            session['coinbase_user']['id'],
-            file_name,
-            ipfs_hash,
+            user_id=user_id,
+            file_name=file_name,
+            video_cid=ipfs_hash,
+            preview_cid='',  # Update this if you have a preview CID
+            title=title,
+            description=description,
+            tags=tags,
+            profile_pic_url=profile_pic_url
+        )
+
+        # Upload to blockchain
+        nonce = web3.eth.get_transaction_count(account.address)
+        txn = contract.functions.uploadVideo(
             title,
             description,
+            ipfs_hash,
             tags
-        )
-        # upload to chain
-        # tx_hash = contract.functions.addVideo(title, ipfs_hash).transact({
-        #     'from': web3.eth.accounts[0]
-        # })
+        ).build_transaction({
+            'from': account.address,
+            'nonce': nonce,
+            'gas': 3000000,
+            'gasPrice': web3.toWei('20', 'gwei')
+        })
 
-        # tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-        # return jsonify({
-        #     'message': 'Successfully uploaded metadata',
-        #     'transaction_receipt': tx_receipt
-        # }), 200
+        signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+        tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        return jsonify({
+            'message': 'Successfully uploaded metadata',
+            'transaction_receipt': tx_receipt.hex()
+        }), 200
     except Exception as e:
-        return jsonify({'error happened while uploading': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/like', methods=['POST'])
 def like_video():
@@ -118,9 +139,9 @@ def like_video():
         likes = mongo.increment_like_count(cid)
         return jsonify({'message': 'Successfully liked video',
                         'likes': likes}
-                        ),200
+                        ), 200
     except Exception as e:
-        return jsonify({'error happened while liking a video': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/unlike', methods=['POST'])
 def unlike_video():
@@ -134,7 +155,7 @@ def unlike_video():
                          'likes': likes}
                         ), 200
     except Exception as e:
-        return jsonify({'error happened while unliking a video': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/view', methods=['POST'])
 def view_video():
@@ -148,7 +169,7 @@ def view_video():
                         'views': views}
                         ), 200
     except Exception as e:
-        return jsonify({'error happened while viewing a video': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/getUserInfo', methods=['GET'])
 def get_user_info():
@@ -157,7 +178,7 @@ def get_user_info():
     try:
         return jsonify({'user_info': session['coinbase_user']}), 200
     except Exception as e:
-        return jsonify({'error happened while getting user info': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/videos', methods=['GET'])
 def list_videos():
@@ -173,7 +194,7 @@ def list_videos():
     try:
         total_videos = mongo.count_videos(user_id)
         videos = mongo.list_all_videos(user_id=user_id, skip=skip, limit=limit)
-        total_pages = math.ceil(total_videos / limit)
+        total_pages = max(1, (total_videos + limit - 1) // limit)
         has_next_page = page < total_pages
         has_previous_page = page > 1
 
@@ -189,9 +210,8 @@ def list_videos():
         return jsonify(response)
     except ValueError:
         return jsonify({'error': 'Page and limit must be valid integers'}), 400
-    except:
-        return jsonify({'error': 'Failed to list videos'}), 500
-
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8000, debug=True)
