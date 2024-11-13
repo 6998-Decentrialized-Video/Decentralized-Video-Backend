@@ -19,6 +19,7 @@ __pycache__/
 # Python virtual environments
 venv/
 env/
+.venv/
 
 # IPFS data (if any local data is stored)
 .ipfs/

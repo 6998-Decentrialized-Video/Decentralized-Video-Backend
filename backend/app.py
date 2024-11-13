@@ -3,6 +3,7 @@ import json
 import requests
 from flask import Flask, request, jsonify, redirect, url_for, session
 from web3 import Web3
+from eth_utils import to_wei
 
 from mongo_wrapper import MongoDBWrapper
 
@@ -33,6 +34,13 @@ COINBASE_CLIENT_ID = os.getenv("COINBASE_CLIENT_ID")
 COINBASE_CLIENT_SECRET = os.getenv("COINBASE_CLIENT_SECRET")
 
 mongo = MongoDBWrapper()
+
+@app.route('/', methods=['GET'])
+def home():
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
+    return "Welcome to BTube  - a Decentralized Video Platform!"
+
 
 @app.route('/loginCoinbase', methods=['GET'])
 def login_coinbase():
@@ -80,8 +88,8 @@ def coinbase_callback():
 
 @app.route('/upload', methods=['POST'])
 def upload_video():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
         title = data.get('title')
@@ -89,10 +97,11 @@ def upload_video():
         ipfs_hash = data.get('ipfs_hash')  # From front end
         file_name = data.get('file_name')
         tags = data.get('tags', [])
-        profile_pic_url = session['coinbase_user'].get('avatar_url', '')
-        user_id = session['coinbase_user']['id']
+        # profile_pic_url = session['coinbase_user'].get('avatar_url', '')
+        # user_id = session['coinbase_user']['id']
+        user_id = 'test_user_id'
+        profile_pic_url = 'test_profile_pic_url'
 
-        # Add video metadata to MongoDB
         mongo.add_video_metadata(
             user_id=user_id,
             file_name=file_name,
@@ -115,24 +124,30 @@ def upload_video():
             'from': account.address,
             'nonce': nonce,
             'gas': 3000000,
-            'gasPrice': web3.toWei('20', 'gwei')
+            'gasPrice': to_wei('20', 'gwei')  # Updated line
         })
 
         signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
-        tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+        tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+
+
+        print(f"Transaction hash: {tx_hash.hex()}")
+
         tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        print(tx_receipt)
 
         return jsonify({
             'message': 'Successfully uploaded metadata',
-            'transaction_receipt': tx_receipt.hex()
+            'transaction_receipt': tx_receipt.transactionHash.hex()
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/like', methods=['POST'])
 def like_video():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
         cid = data.get('cid')
@@ -145,8 +160,8 @@ def like_video():
 
 @app.route('/unlike', methods=['POST'])
 def unlike_video():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
         cid = data.get('cid')
@@ -159,8 +174,8 @@ def unlike_video():
 
 @app.route('/view', methods=['POST'])
 def view_video():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
         cid = data.get('cid')
@@ -173,8 +188,8 @@ def view_video():
 
 @app.route('/getUserInfo', methods=['GET'])
 def get_user_info():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+    # if 'coinbase_user' not in session:
+    #     return redirect(url_for('login_coinbase'))
     try:
         return jsonify({'user_info': session['coinbase_user']}), 200
     except Exception as e:
