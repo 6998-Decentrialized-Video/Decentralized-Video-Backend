@@ -43,8 +43,8 @@ mongo = MongoDBWrapper()
 
 @app.route('/', methods=['GET'])
 def home():
-    # if 'coinbase_user' not in session:
-    #     return redirect(url_for('login_coinbase'))
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
     return "Welcome to BTube  - a Decentralized Video Platform!"
 
 
@@ -91,10 +91,25 @@ def coinbase_callback():
 
         session['coinbase_user'] = user_info['data']
 
-        redirect_url = f"{FRONTEND_URL}/home?token={access_token}"
-        return redirect(redirect_url)
-
-        # return jsonify({'message': 'Login successful', 'user': user_info['data']}), 200
+        return f"""
+                <html>
+                <head>
+                    <script type="text/javascript">
+                        function sendAndClose() {{
+                            window.opener.postMessage({{
+                                accessToken: "{access_token}",
+                                user: {json.dumps(user_info['data'])}
+                            }}, "*");
+                            window.close();
+                        }}
+                        window.onload = sendAndClose;
+                    </script>
+                </head>
+                <body>
+                    <p>Authentication successful. Closing window...</p>
+                </body>
+                </html>
+                """
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
