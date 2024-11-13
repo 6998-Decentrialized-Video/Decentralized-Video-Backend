@@ -1,16 +1,22 @@
 import os
 import json
 import requests
-from flask import Flask, request, jsonify, redirect, url_for, session
+from flask import Flask, request, jsonify, redirect, url_for, session, render_template
 from web3 import Web3
 
 from mongo_wrapper import MongoDBWrapper
 
 from dotenv import load_dotenv
 
+
+from flask_cors import CORS
+
+
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
+
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
 # Initialize Web3
@@ -33,6 +39,13 @@ COINBASE_CLIENT_ID = os.getenv("COINBASE_CLIENT_ID")
 COINBASE_CLIENT_SECRET = os.getenv("COINBASE_CLIENT_SECRET")
 
 mongo = MongoDBWrapper()
+
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 
 @app.route('/loginCoinbase', methods=['GET'])
 def login_coinbase():

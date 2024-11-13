@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login from Coinbase</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    async function handleLogin() {
+      try {
+        const response = await fetch("http://localhost:8000/loginCoinbase", {
+          method: "GET",
+          // redirect: "follow",
+          // credentials: "include", // Include cookies for session handling
+        });
+
+        
+
+
+        if (response.redirected) {
+          window.location.href = response.url; // Redirect to Coinbase login page
+        } else {
+          throw new Error("Unexpected response from server");
+        }
+      } catch (error) {
+        console.error("Error during login:", error);
+        alert("Failed to initiate login. Please try again.");
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="center-container">
+    <button class="login-button" onclick="handleLogin()">Login from Coinbase</button>
+  </div>
+</body>
+</html>

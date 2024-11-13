@@ -1,0 +1,42 @@
+/* Set the background color and remove default margin */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #121212; /* Dark background */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh; /* Full viewport height */
+  font-family: Arial, sans-serif;
+}
+
+/* Center the button */
+.center-container {
+  text-align: center;
+}
+
+/* Style the login button */
+.login-button {
+  padding: 15px 30px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+  background-color: #e84142; /* Coinbase red */
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s, transform 0.2s;
+}
+
+/* Hover effect for the button */
+.login-button:hover {
+  background-color: #c53030; /* Darker red on hover */
+  transform: scale(1.05); /* Slightly larger */
+}
+
+/* Active state for the button */
+.login-button:active {
+  background-color: #a52828; /* Even darker red on click */
+  transform: scale(0.95); /* Slightly smaller */
+}
