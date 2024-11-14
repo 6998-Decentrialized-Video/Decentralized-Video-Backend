@@ -16,7 +16,12 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
-CORS(app, origins=["http://localhost:3000"])
+CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=False  # In development; change to True for production with HTTPS
+)
+
 
 
 # Initialize Web3
@@ -119,21 +124,22 @@ def upload_video():
         return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
+        print(data)
         title = data.get('title')
         description = data.get('description')
-        ipfs_hash = data.get('ipfs_hash') # from front end
+        video_cid = data.get('video_cid')
+        preview_cid = data.get('preview_cid')
         file_name = data.get('file_name')
         tags = data.get('tags', [])
-        # profile_pic_url = session['coinbase_user'].get('avatar_url', '')
-        # user_id = session['coinbase_user']['id']
-        user_id = 'test_user_id'
-        profile_pic_url = 'test_profile_pic_url'
+
+        profile_pic_url = session['coinbase_user'].get('avatar_url', '')
+        user_id = session['coinbase_user']['id']
 
         mongo.add_video_metadata(
             user_id=user_id,
             file_name=file_name,
-            video_cid=ipfs_hash,
-            preview_cid='',  # Update this if you have a preview CID
+            video_cid=video_cid,
+            preview_cid=preview_cid,
             title=title,
             description=description,
             tags=tags,
@@ -145,7 +151,7 @@ def upload_video():
         txn = contract.functions.uploadVideo(
             title,
             description,
-            ipfs_hash,
+            video_cid,
             tags
         ).build_transaction({
             'from': account.address,
@@ -222,6 +228,21 @@ def get_user_info():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/video', methods=['GET'])
+def get_video():
+    cid = request.args.get('cid')
+    try:
+        video_data = mongo.get_video_metadata(cid)
+        video_data['_id'] = str(video_data['_id'])
+        for comment in video_data['comments']:
+            comment['_id'] = str(comment['_id'])
+            for reply in comment['replies']:
+                reply['_id'] = str(reply['_id'])
+        return jsonify({'video_data': video_data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/videos', methods=['GET'])
 def list_videos():
     user_id = request.args.get('user_id', default=None)
@@ -235,11 +256,19 @@ def list_videos():
 
     try:
         total_videos = mongo.count_videos(user_id)
+        print(total_videos)
         videos = mongo.list_all_videos(user_id=user_id, skip=skip, limit=limit)
+        print(videos)
         total_pages = max(1, (total_videos + limit - 1) // limit)
         has_next_page = page < total_pages
         has_previous_page = page > 1
 
+        for video in videos:
+            video['_id'] = str(video['_id'])
+            for comment in video['comments']:
+                comment['_id'] = str(comment['_id'])
+                for reply in comment['replies']:
+                    reply['_id'] = str(reply['_id'])
         response = {
             'videos': videos,
             'page': page,
