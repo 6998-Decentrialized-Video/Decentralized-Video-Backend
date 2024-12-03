@@ -17,6 +17,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+# CORS(app)
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=False  # In development; change to True for production with HTTPS
@@ -176,6 +177,59 @@ def upload_video():
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/addComment', methods=['POST'])
+def add_comment():
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
+        video_cid = data.get('video_cid')
+        user_id = session.get('user_id')  # Assuming user ID is stored in session
+        comment_text = data.get('comment_text')
+        profile_pic_url = data.get('profile_pic_url')
+        if not (video_cid and user_id and comment_text):
+            return jsonify({'error': 'Missing required fields'}), 400
+        comments = mongo.add_comment(video_cid, user_id, comment_text, profile_pic_url)
+        return jsonify({'message': 'Successfully added comment',
+                        'comment': comments}
+                        ), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/deleteComment', methods=['POST'])
+def delete_comment():
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
+        
+        # Extract necessary fields
+        video_cid = data.get('video_cid')
+        comment_id = data.get('comment_id')
+        parent_comment_id = data.get('parent_comment_id')  # Optional
+
+        # Validate required fields
+        if not (video_cid and comment_id):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        comments = mongo.delete_comment(
+            video_cid=video_cid,
+            comment_id=comment_id,
+            parent_comment_id=parent_comment_id
+        )
+        return jsonify({'message': 'Successfully deleted comment',
+                        'comment': comments}
+                        ), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
 
 @app.route('/like', methods=['POST'])
 def like_video():
@@ -227,6 +281,17 @@ def get_user_info():
         return jsonify({'user_info': session['coinbase_user']}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/user', methods=['GET'])
+def get_user():
+    user_id = request.args.get('user_id')
+    user_avatar = mongo.get_profile_pic_url(user_id)
+    try:
+        return jsonify({'user_id': user_id, 'user_profile_pic':user_avatar}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 
 @app.route('/video', methods=['GET'])
 def get_video():

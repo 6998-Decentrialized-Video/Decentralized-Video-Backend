@@ -111,3 +111,10 @@ class MongoDBWrapper:
         """Count the number of videos, optionally filtered by user_id."""
         query = {"user_id": user_id} if user_id else {}
         return self.collection.count_documents(query)
+    
+    def get_profile_pic_url(self, user_id):
+        """Retrieve the profile picture URL for a given user ID."""
+        user_data = self.collection.find_one({"user_id": user_id}, {"profile_pic_url": 1})
+        if not user_data:
+            raise ValueError(f"No user found with user_id: {user_id}")
+        return user_data.get("profile_pic_url")
