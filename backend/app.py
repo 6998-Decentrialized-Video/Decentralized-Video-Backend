@@ -187,7 +187,7 @@ def add_comment():
         if not data:
             return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
         video_cid = data.get('video_cid')
-        user_id = session.get('user_id')  # Assuming user ID is stored in session
+        user_id = session['coinbase_user']['id']
         comment_text = data.get('comment_text')
         profile_pic_url = data.get('profile_pic_url')
         if not (video_cid and user_id and comment_text):
