@@ -1,5 +1,9 @@
+import math
 import os
+import requests
 import json
+
+from dns.message import make_response
 import requests
 from flask import Flask, request, jsonify, redirect, url_for, session
 from flask_cors import CORS
@@ -16,9 +20,11 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+# CORS(app)
 app.config.update(
-    SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=False
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_DOMAIN="localhost",
 )
 
 WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER_URI")
@@ -79,7 +85,8 @@ def coinbase_callback():
 
         access_token = token_response_data['access_token']
         user_info_url = 'https://api.coinbase.com/v2/user'
-        user_info_headers = {'Authorization': f'Bearer {access_token}'}
+        user_info_headers = {'Authorization': f'Bearer {access_token}',
+                             'Content-Type': "application/json"}
         user_info_response = requests.get(user_info_url, headers=user_info_headers)
         user_info = user_info_response.json()
 
@@ -87,26 +94,12 @@ def coinbase_callback():
             return jsonify({'error': 'Failed to obtain user information'}), 400
 
         session['coinbase_user'] = user_info['data']
+        app.logger.info(f"Session set: {session.get('coinbase_user')}")
+        response = redirect(f"{FRONTEND_URL}/oauth/callback")
+        response.headers[
+            'Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
 
-        return f"""
-                <html>
-                <head>
-                    <script type="text/javascript">
-                        function sendAndClose() {{
-                            window.opener.postMessage({{
-                                accessToken: "{access_token}",
-                                user: {json.dumps(user_info['data'])}
-                            }}, "*");
-                            window.close();
-                        }}
-                        window.onload = sendAndClose;
-                    </script>
-                </head>
-                <body>
-                    <p>Authentication successful. Closing window...</p>
-                </body>
-                </html>
-                """
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -126,9 +119,6 @@ def upload_video():
 
         profile_pic_url = session['coinbase_user'].get('avatar_url', '')
         user_id = session['coinbase_user']['id']
-
-        # profile_pic_url = "test_pic"
-        # user_id = "test_id"
 
         mongo.add_video_metadata(
             user_id=user_id,
@@ -157,7 +147,12 @@ def upload_video():
         signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
         tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
+
+        print(f"Transaction hash: {tx_hash.hex()}")
+
         tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        print(tx_receipt)
 
         return jsonify({
             'message': 'Successfully uploaded metadata',
@@ -215,8 +210,8 @@ def like_video():
 
         if status == 1:
             likes = mongo.increment_like_count(video_cid)
-        elif status == -1:
-            likes = mongo.decrement(video_cid)
+        else:
+            likes = mongo.decrement_like_count(video_cid)
 
         return jsonify({
             'message': 'Successfully updated like status',
@@ -260,14 +255,15 @@ def view_video():
         signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
         tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
         tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-        
-        views = mongo.increment_view_count(video_cid)
 
-        return jsonify({
+        views = mongo.increment_view_count(video_cid)
+        response = {
             'message': 'Successfully viewed video',
             'transaction_receipt': tx_receipt.transactionHash.hex(),
             'views': views
-        }), 200
+        }
+        print(response)
+        return jsonify(response), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -276,7 +272,7 @@ def view_video():
 @app.route('/getUserInfo', methods=['GET'])
 def get_user_info():
     if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
+        return jsonify({'error': 'User not authenticated'}), 401
     try:
         return jsonify({'user_info': session['coinbase_user']}), 200
     except Exception as e:
@@ -312,7 +308,7 @@ def get_video():
 def list_videos():
     user_id = request.args.get('user_id', default=None)
     page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 10))
+    limit = int(request.args.get('limit', 50))
     if page < 1 or limit < 1:
         return jsonify(
             {'error': 'Page and limit must be positive integers'}), 400

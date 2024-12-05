@@ -102,7 +102,7 @@ class MongoDBWrapper:
         """Retrieve video metadata by video_cid."""
         return self.collection.find_one({"video_cid": video_cid})
 
-    def list_all_videos(self, user_id=None, skip=0, limit=10):
+    def list_all_videos(self, user_id=None, skip=0, limit=50):
         """List all videos with optional pagination, optionally filtered by user_id."""
         query = {"user_id": user_id} if user_id else {}
         return list(self.collection.find(query).skip(skip).limit(limit))
