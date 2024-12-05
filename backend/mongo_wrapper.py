@@ -102,7 +102,18 @@ class MongoDBWrapper:
         # return the updated view count
         views = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "view_count": 1})
         return views.get("view_count", 0)
-
+        
+    def has_liked(self, video_cid, user_id):
+        """
+        check if the user has liked the video, return True if the user has liked it 
+        """
+        user_profile = self.user_profile.find_one({"user_id": user_id})
+        print(user_profile)
+        if user_profile:
+            for liked_video in user_profile.get("liked_videos", []):
+                if liked_video["videoCid"] == video_cid:
+                    return True
+        return False
 
     def increment_like_count(self, video_cid, user_id):
         """
