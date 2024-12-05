@@ -162,7 +162,16 @@ def upload_video():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
+@app.route('/hasLiked', methods=['GET'])
+def has_liked():
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
+    return jsonify({
+        "liked" : mongo.has_liked(
+            request.get_json().get('video_cid'),
+            session['coinbase_user']['id']
+        )}
+    )
 @app.route('/like', methods=['POST'])
 def like_video():
     if 'coinbase_user' not in session:

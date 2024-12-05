@@ -115,6 +115,15 @@ class MongoDBWrapper:
                     return True
         return False
 
+    def has_liked(self, video_cid, user_id):
+        interaction = self.db.user_interactions.find_one(
+            {"user_id": user_id, "likedVideos.videoCid": video_cid},
+            {"likedVideos.$": 1}
+        )
+        if interaction:
+            current_status = interaction["likedVideos"][0]["status"]
+            return current_status == 1
+
     def increment_like_count(self, video_cid, user_id):
         """
         Increment the like count for a video 
