@@ -10,6 +10,33 @@ class MongoDBWrapper:
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
+        self.user_profile = self.db["user_profile"]
+
+    def create_user_profile(self, user_id, user_name,profile_pic_url):
+        """
+        Create a new user profile after log in 
+        """
+        existing_profile = self.user_profile.find_one({"user_id": user_id})
+
+        if existing_profile:
+            print("User profile already exists.")
+            return existing_profile  # Return existing profile if found
+
+        # Create a new profile
+        new_profile = {
+            "user_id": user_id,
+            "user_name":user_name,
+            "profile_pic_url": profile_pic_url,
+            "liked_videos": [],
+            "viewed_videos": [],
+            "uploaded_videos": []
+        }
+
+        # add it to the collection 
+        self.user_profile.insert_one(new_profile)
+        print("User profile created successfully.")
+        return new_profile
+
 
     def add_video_metadata(self, user_id, file_name, video_cid, preview_cid, title, description, tags, profile_pic_url, visibility="public", pinned=True):
         """Add a new video metadata document to MongoDB, including uploader profile pic URL and preview CID."""
@@ -30,104 +57,114 @@ class MongoDBWrapper:
             "comments": []  # Initialize empty list for comments
         }
         result = self.collection.insert_one(metadata)
+        
+        # update the uploaded video section in user profile 
+        self.user_profile.update_one(
+        {"user_id": user_id},
+        {
+            "$push": {
+                "uploaded_videos": {
+                    "videoCid": video_cid,
+                    "timestamp": datetime.now()
+                }
+            }
+        },
+        upsert=True  # Ensure the user profile exists
+        )
+
         return str(result.inserted_id)  # Return the ID of the inserted document
 
-    def increment_view_count(self, video_cid):
-        """Increment the view count for a video by CID."""
-        result = self.collection.update_one({"video_cid": video_cid}, {"$inc": {"view_count": 1}})
+    def increment_view_count(self, video_cid, user_id):
+        """
+        Increment the view count for a video and add the video to the user's viewed videos in the user_profile schema.
+        """
+        result = self.collection.update_one(
+            {"video_cid": video_cid},
+            {"$inc": {"view_count": 1}}
+        )
         if result.matched_count < 1:
             raise ValueError(f"No document found with video_cid: {video_cid}")
+
+        # Add the video to the user's viewed videos in user_profile
+        self.user_profile.update_one(
+            {"user_id": user_id},
+            {
+                "$push": {
+                    "viewed_videos": {
+                        "videoCid": video_cid,
+                        "timestamp": datetime.now()
+                    }
+                }
+            },
+            upsert=True  
+        )
+
+        # return the updated view count
         views = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "view_count": 1})
         return views.get("view_count", 0)
 
-    def increment_like_count(self, video_cid, user_id):
-        """Increment the like count for a video and update user interaction in place."""
 
-        # Check if the videoCid already exists in the likedVideos array
-        interaction = self.db.user_interactions.find_one(
-            {"user_id": user_id, "likedVideos.videoCid": video_cid},
-            {"likedVideos.$": 1}
+    def increment_like_count(self, video_cid, user_id):
+        """
+        Increment the like count for a video 
+        """
+        # Check if the videoCid is already liked by the user
+        user_profile = self.user_profile.find_one({"user_id": user_id, "liked_videos.videoCid": video_cid})
+        if user_profile:
+            # Video is already liked; do nothing
+            likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
+            return likes.get("like_count", 0)
+
+        # Add the video to the user's liked_videos
+        self.user_profile.update_one(
+            {"user_id": user_id},
+            {
+                "$push": {
+                    "liked_videos": {
+                        "videoCid": video_cid,
+                        "timestamp": datetime.now()
+                    }
+                }
+            },
+            upsert=True  # Ensure the user profile exists
         )
 
-        if interaction:
-            current_status = interaction["likedVideos"][0]["status"]
-            # If already liked, do nothing
-            if current_status == 1:
-                likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
-                return likes.get("like_count", 0)
-            
-            # Update the status in place to '1' (like)
-            self.db.user_interactions.update_one(
-                {"user_id": user_id},
-                {
-                    "$set": {
-                        "likedVideos.$[vid].status": 1,
-                        "likedVideos.$[vid].timestamp": datetime.now()
-                    }
-                },
-                array_filters=[{"vid.videoCid": video_cid}]
-            )
-            self.collection.update_one({"video_cid": video_cid}, {"$inc": {"like_count": 1}})
-        else:
-            # No interaction exists, add a new entry for like
-            self.db.user_interactions.update_one(
-                {"user_id": user_id},
-                {
-                    "$push": {
-                        "likedVideos": {
-                            "videoCid": video_cid,
-                            "status": 1,
-                            "timestamp": datetime.now()
-                        }
-                    }
-                },
-                upsert=True
-            )
-            # Increment the like count
-            self.collection.update_one({"video_cid": video_cid}, {"$inc": {"like_count": 1}})
+        # Increment the like count in the videos collection
+        self.collection.update_one({"video_cid": video_cid}, {"$inc": {"like_count": 1}})
 
+        # Return the updated like count
         likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
         return likes.get("like_count", 0)
 
 
 
     def decrement_like_count(self, video_cid, user_id):
-        """Decrement the like count for a video and update user interaction in place."""
+        """
+        Decrement the like count for a video 
+        """
+        # Check if the videoCid is already liked - we only do unlike 
+        user_profile = self.user_profile.find_one({"user_id": user_id, "liked_videos.videoCid": video_cid})
+        if not user_profile:
+            # Video is not liked; do nothing
+            likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
+            return likes.get("like_count", 0)
 
-        # Check if the videoCid already exists in the likedVideos array
-        interaction = self.db.user_interactions.find_one(
-            {"user_id": user_id, "likedVideos.videoCid": video_cid},
-            {"likedVideos.$": 1}
+        # Remove the video from the user's liked_videos
+        self.user_profile.update_one(
+            {"user_id": user_id},
+            {"$pull": {"liked_videos": {"videoCid": video_cid}}}
         )
 
-        if interaction:
-            current_status = interaction["likedVideos"][0]["status"]
-
-            # If no interaction, do nothing
-            if current_status == 0:
-                likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
-                return likes.get("like_count", 0)
-
-            # Update the status in place to '0' (no interaction)
-            self.db.user_interactions.update_one(
-                {"user_id": user_id},
-                {
-                    "$set": {
-                        "likedVideos.$[vid].status": 0,
-                        "likedVideos.$[vid].timestamp": datetime.now()
-                    }
-                },
-                array_filters=[{"vid.videoCid": video_cid}]
-            )
-            # Decrement the like count
-            self.collection.update_one(
-            {"video_cid": video_cid, "like_count": {"$gt": 0}},  # Ensures like_count doesn't go below 0
+        # Decrement the like count in the videos collection (ensure it doesn't go below 0)
+        self.collection.update_one(
+            {"video_cid": video_cid, "like_count": {"$gt": 0}},  
             {"$inc": {"like_count": -1}}
         )
-
+        
         # Return the updated like count
         likes = self.collection.find_one({"video_cid": video_cid}, {"_id": 0, "like_count": 1})
         return likes.get("like_count", 0)
+
 
 
     def add_comment(self, video_cid, user_id, comment_text, profile_pic_url, parent_comment_id=None):
