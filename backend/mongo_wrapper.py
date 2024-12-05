@@ -12,6 +12,13 @@ class MongoDBWrapper:
         self.collection = self.db[collection_name]
         self.user_profile = self.db["user_profile"]
 
+    def get_user_info(self,user_id):
+        """
+        get the user profile metadata by user_id
+        """ 
+        user_profile = self.user_profile.find_one({"user_id": user_id})
+        return user_profile
+    
     def create_user_profile(self, user_id, user_name,profile_pic_url):
         """
         Create a new user profile after log in 
