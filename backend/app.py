@@ -1,7 +1,6 @@
-import math
 import os
-import requests
 import json
+import requests
 from flask import Flask, request, jsonify, redirect, url_for, session
 from flask_cors import CORS
 
@@ -17,29 +16,22 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
-# CORS(app)
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=False  # In development; change to True for production with HTTPS
+    SESSION_COOKIE_SECURE=False
 )
 
-
-
-# Initialize Web3
 WEB3_PROVIDER_URI = os.getenv("WEB3_PROVIDER_URI")
 web3 = Web3(Web3.HTTPProvider(WEB3_PROVIDER_URI))
 
-# Load Contract ABI
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
 with open('contract_abi.json', 'r') as abi_file:
     CONTRACT_ABI = json.load(abi_file)
 contract = web3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
 
-# Set up account
 PRIVATE_KEY = os.getenv("PRIVATE_KEY")
 account = web3.eth.account.from_key(PRIVATE_KEY)
 
-# Coinbase OAuth configuration
 COINBASE_REDIRECT_URI = os.getenv("COINBASE_REDIRECT_URI")
 COINBASE_CLIENT_ID = os.getenv("COINBASE_CLIENT_ID")
 COINBASE_CLIENT_SECRET = os.getenv("COINBASE_CLIENT_SECRET")
@@ -51,8 +43,7 @@ mongo = MongoDBWrapper()
 def home():
     if 'coinbase_user' not in session:
         return redirect(url_for('login_coinbase'))
-    return "Welcome to BTube  - a Decentralized Video Platform!"
-
+    return "Welcome to BTube - a Decentralized Video Platform!"
 
 @app.route('/loginCoinbase', methods=['GET'])
 def login_coinbase():
@@ -119,13 +110,13 @@ def coinbase_callback():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/upload', methods=['POST'])
 def upload_video():
     if 'coinbase_user' not in session:
         return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
-        print(data)
         title = data.get('title')
         description = data.get('description')
         video_cid = data.get('video_cid')
@@ -135,6 +126,9 @@ def upload_video():
 
         profile_pic_url = session['coinbase_user'].get('avatar_url', '')
         user_id = session['coinbase_user']['id']
+
+        # profile_pic_url = "test_pic"
+        # user_id = "test_id"
 
         mongo.add_video_metadata(
             user_id=user_id,
@@ -147,7 +141,6 @@ def upload_video():
             profile_pic_url=profile_pic_url
         )
 
-        # Upload to blockchain
         nonce = web3.eth.get_transaction_count(account.address)
         txn = contract.functions.uploadVideo(
             title,
@@ -158,77 +151,21 @@ def upload_video():
             'from': account.address,
             'nonce': nonce,
             'gas': 3000000,
-            'gasPrice': to_wei('20', 'gwei')  # Updated line
+            'gasPrice': to_wei('20', 'gwei')
         })
 
         signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
         tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
-
-        print(f"Transaction hash: {tx_hash.hex()}")
-
         tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
-
-        print(tx_receipt)
 
         return jsonify({
             'message': 'Successfully uploaded metadata',
-            'transaction_receipt': tx_receipt.transactionHash.hex()
+            'transaction_receipt': tx_receipt.transactionHash.hex(),
+            'video_cid': video_cid
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/addComment', methods=['POST'])
-def add_comment():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
-        video_cid = data.get('video_cid')
-        user_id = session['coinbase_user']['id']
-        comment_text = data.get('comment_text')
-        profile_pic_url = data.get('profile_pic_url')
-        if not (video_cid and user_id and comment_text):
-            return jsonify({'error': 'Missing required fields'}), 400
-        comments = mongo.add_comment(video_cid, user_id, comment_text, profile_pic_url)
-        return jsonify({'message': 'Successfully added comment',
-                        'comment': comments}
-                        ), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    
-@app.route('/deleteComment', methods=['POST'])
-def delete_comment():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
-        
-        # Extract necessary fields
-        video_cid = data.get('video_cid')
-        comment_id = data.get('comment_id')
-        parent_comment_id = data.get('parent_comment_id')  # Optional
-
-        # Validate required fields
-        if not (video_cid and comment_id):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        comments = mongo.delete_comment(
-            video_cid=video_cid,
-            comment_id=comment_id,
-            parent_comment_id=parent_comment_id
-        )
-        return jsonify({'message': 'Successfully deleted comment',
-                        'comment': comments}
-                        ), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    
-
 
 
 @app.route('/like', methods=['POST'])
@@ -237,27 +174,59 @@ def like_video():
         return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
-        cid = data.get('cid')
-        likes = mongo.increment_like_count(cid)
-        return jsonify({'message': 'Successfully liked video',
-                        'likes': likes}
-                        ), 200
+
+        video_cid = data.get('video_cid')
+        if not isinstance(video_cid, str):
+            return jsonify({'error': 'video_cid must be a string'}), 400
+
+        status = data.get('status')
+        try:
+            status = int(status)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid status type; must be an integer'}), 400
+        if status not in [1, -1]:
+            return jsonify({'error': 'Invalid status value; must be 1 or -1'}), 400
+
+        # Use hardcoded user_id for testing
+        # user_id = "079dc906-9f13-4aaa-892e-d1f515925265"
+
+        user_id = session['coinbase_user']['id']
+        user_id_hash = web3.keccak(text=user_id)
+
+        if not isinstance(user_id_hash, bytes) or len(user_id_hash) != 32:
+            return jsonify({'error': 'user_id_hash must be bytes32'}), 500
+
+        # Build and send the transaction
+        nonce = web3.eth.get_transaction_count(account.address)
+        txn = contract.functions.setLikeStatus(
+            video_cid,
+            user_id_hash,
+            status
+        ).build_transaction({
+            'from': account.address,
+            'nonce': nonce,
+            'gas': 300000,
+            'gasPrice': to_wei('20', 'gwei')
+        })
+
+        signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+        tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+
+        if status == 1:
+            likes = mongo.increment_like_count(video_cid)
+        elif status == -1:
+            likes = mongo.decrement(video_cid)
+
+        return jsonify({
+            'message': 'Successfully updated like status',
+            'transaction_receipt': tx_receipt.transactionHash.hex(),
+            'likes': likes
+        }), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/unlike', methods=['POST'])
-def unlike_video():
-    if 'coinbase_user' not in session:
-        return redirect(url_for('login_coinbase'))
-    try:
-        data = request.get_json()
-        cid = data.get('cid')
-        likes = mongo.decrement_like_count(cid)
-        return jsonify({'message': 'Successfully unliked video',
-                         'likes': likes}
-                        ), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/view', methods=['POST'])
 def view_video():
@@ -265,13 +234,44 @@ def view_video():
         return redirect(url_for('login_coinbase'))
     try:
         data = request.get_json()
-        cid = data.get('cid')
-        views = mongo.increment_view_count(cid)
-        return jsonify({'message': 'Successfully viewed video',
-                        'views': views}
-                        ), 200
+
+        video_cid = data.get('video_cid')
+        if not isinstance(video_cid, str):
+            return jsonify({'error': 'video_cid must be a string'}), 400
+
+        # Use hardcoded user_id for testing
+        # user_id = "079dc906-9f13-4aaa-892e-d1f515925265"
+
+        user_id = session['coinbase_user']['id']
+        user_id_hash = web3.keccak(text=user_id)
+
+        # Build and send the transaction
+        nonce = web3.eth.get_transaction_count(account.address)
+        txn = contract.functions.viewVideo(
+            video_cid,
+            user_id_hash
+        ).build_transaction({
+            'from': account.address,
+            'nonce': nonce,
+            'gas': 200000,
+            'gasPrice': to_wei('20', 'gwei')
+        })
+
+        signed_txn = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+        tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
+        tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+        
+        views = mongo.increment_view_count(video_cid)
+
+        return jsonify({
+            'message': 'Successfully viewed video',
+            'transaction_receipt': tx_receipt.transactionHash.hex(),
+            'views': views
+        }), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/getUserInfo', methods=['GET'])
 def get_user_info():
