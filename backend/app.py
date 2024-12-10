@@ -14,6 +14,8 @@ from eth_utils import to_wei
 from mongo_wrapper import MongoDBWrapper
 
 from dotenv import load_dotenv
+from bson import ObjectId
+
 
 load_dotenv()
 
@@ -326,9 +328,9 @@ def list_videos():
 
     try:
         total_videos = mongo.count_videos(user_id)
-        print(total_videos)
+        # print(total_videos)
         videos = mongo.list_all_videos(user_id=user_id, skip=skip, limit=limit)
-        print(videos)
+        # print(videos)
         total_pages = max(1, (total_videos + limit - 1) // limit)
         has_next_page = page < total_pages
         has_previous_page = page > 1
@@ -354,5 +356,98 @@ def list_videos():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/addComment', methods=['POST'])
+def add_comment():
+    mock_session()
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
+        video_cid = data.get('video_cid')
+        comment_text = data.get('comment_text')
+        user_id = session['coinbase_user']['id']
+        
+        profile_pic_url = session['coinbase_user'].get('avatar_url', '')
+        if not (video_cid and user_id and comment_text):
+            return jsonify({'error': 'Missing required fields'}), 400
+        print(video_cid, user_id, comment_text, profile_pic_url)
+        comments = mongo.add_comment(video_cid, user_id, comment_text, profile_pic_url)
+        all_comments = mongo.list_all_comments(video_cid)
+        print("list all comments:", all_comments)
+        return jsonify({'message': 'Successfully added comment',
+                        'comment': comments}
+                        ), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/deleteComment', methods=['POST'])
+def delete_comment():
+    mock_session()
+    if 'coinbase_user' not in session:
+        return redirect(url_for('login_coinbase'))
+    try:
+        data = request.get_json()
+        # print(data)
+        if not data:
+            return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
+        
+        video_cid = data.get('video_cid')
+        comment_id = data.get('comment_id')
+        parent_comment_id = data.get('parent_comment_id')  # Optional for nested comments
+
+        if not video_cid or not comment_id:
+            return jsonify({'error': 'Missing required fields'}), 400
+        try:
+            comment_id = ObjectId(comment_id)
+            if parent_comment_id:
+                parent_comment_id = ObjectId(parent_comment_id)
+        except Exception:
+            return jsonify({'error': 'Invalid comment_id or parent_comment_id'}), 400
+
+        deleted = mongo.delete_comment(video_cid, comment_id, parent_comment_id)
+
+        if deleted:
+            # Fetch all comments after deletion for verification
+            all_comments = mongo.list_all_comments(video_cid)
+            print("Updated comments:", all_comments)
+            return jsonify({'message': 'Successfully deleted comment', 'comments': all_comments}), 200
+        else:
+            return jsonify({'error': 'Failed to delete comment. Comment may not exist.'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/listComments', methods=['GET'])
+def list_comments():
+    try:
+        video_cid = request.args.get('video_cid')
+        if not video_cid:
+            return jsonify({'error': 'Missing required field: video_cid'}), 400
+        comments = mongo.list_all_comments(video_cid)
+        print(comments)
+
+        # Ensure the ObjectId fields are converted to strings
+        for comment in comments:
+            comment['_id'] = str(comment['_id'])
+            for reply in comment.get('replies', []):
+                reply['_id'] = str(reply['_id'])
+
+        return jsonify({'comments': comments}), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 404 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500  
+
+def mock_session():
+    session['coinbase_user'] = {
+        'id': 'mock_user_id',
+        'avatar_url': 'https://example.com/avatar.png'
+    }
+
 if __name__ == '__main__':
+    
     app.run(host='127.0.0.1', port=8000, debug=True)

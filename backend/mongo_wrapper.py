@@ -164,7 +164,6 @@ class MongoDBWrapper:
         return likes.get("like_count", 0)
 
 
-
     def decrement_like_count(self, video_cid, user_id):
         """
         Decrement the like count for a video 
@@ -204,6 +203,7 @@ class MongoDBWrapper:
             "timestamp": datetime.now(),
             "replies": []  # Initialize empty list for replies
         }
+        print("mongo", comment)
         
         # If it's a reply to an existing comment
         if parent_comment_id:
@@ -232,9 +232,25 @@ class MongoDBWrapper:
                 {"$pull": {"comments": {"_id": ObjectId(comment_id)}}}
             )
         return result.modified_count > 0
+    
+
+    def list_all_comments(self, video_cid):
+        """List all comments for a specific video."""
+        video = self.collection.find_one({"video_cid": video_cid})
+        if not video:
+            raise ValueError(f"Video with video_cid {video_cid} does not exist.")
+        
+        comments = video.get("comments", [])
+        if not comments:
+            return []  # Return an empty list if no comments exist
+        
+        sorted_comments = sorted(comments, key=lambda x: x.get("timestamp", datetime.min))
+        return sorted_comments
+
 
     def get_video_metadata(self, video_cid):
         """Retrieve video metadata by video_cid."""
+        # print("meta", video_cid)
         return self.collection.find_one({"video_cid": video_cid})
 
     def list_all_videos(self, user_id=None, skip=0, limit=10):
