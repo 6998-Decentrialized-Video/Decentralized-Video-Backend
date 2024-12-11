@@ -359,11 +359,13 @@ def list_videos():
 
 @app.route('/addComment', methods=['POST'])
 def add_comment():
-    mock_session()
+    # mock_session()
     if 'coinbase_user' not in session:
         return redirect(url_for('login_coinbase'))
     try:
+       
         data = request.get_json()
+        print("comment added!!", data)
         if not data:
             return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
         video_cid = data.get('video_cid')
@@ -384,14 +386,16 @@ def add_comment():
         return jsonify({'error': str(e)}), 500
     
 
-@app.route('/deleteComment', methods=['POST'])
+@app.route('/deleteComment', methods=['DELETE', 'POST'])
 def delete_comment():
-    mock_session()
+    # mock_session()
+    print("deletinggg???")
     if 'coinbase_user' not in session:
         return redirect(url_for('login_coinbase'))
     try:
+        print('before data')
         data = request.get_json()
-        # print(data)
+        print("in delete", data)
         if not data:
             return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
         
@@ -399,27 +403,24 @@ def delete_comment():
         comment_id = data.get('comment_id')
         parent_comment_id = data.get('parent_comment_id')  # Optional for nested comments
 
-        if not video_cid or not comment_id:
-            return jsonify({'error': 'Missing required fields'}), 400
-        try:
-            comment_id = ObjectId(comment_id)
-            if parent_comment_id:
-                parent_comment_id = ObjectId(parent_comment_id)
-        except Exception:
-            return jsonify({'error': 'Invalid comment_id or parent_comment_id'}), 400
-
         deleted = mongo.delete_comment(video_cid, comment_id, parent_comment_id)
 
         if deleted:
             # Fetch all comments after deletion for verification
+            
+
             all_comments = mongo.list_all_comments(video_cid)
+            for comment in all_comments:
+                comment['_id'] = str(comment['_id'])
+                for reply in comment.get('replies', []):
+                    reply['_id'] = str(reply['_id'])
             print("Updated comments:", all_comments)
             return jsonify({'message': 'Successfully deleted comment', 'comments': all_comments}), 200
         else:
             return jsonify({'error': 'Failed to delete comment. Comment may not exist.'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
 
 @app.route('/listComments', methods=['GET'])
 def list_comments():
@@ -442,11 +443,12 @@ def list_comments():
     except Exception as e:
         return jsonify({'error': str(e)}), 500  
 
-def mock_session():
-    session['coinbase_user'] = {
-        'id': 'mock_user_id',
-        'avatar_url': 'https://example.com/avatar.png'
-    }
+# mock session for testing 
+# def mock_session():
+#     session['coinbase_user'] = {
+#         'id': 'mock_user_id',
+#         'avatar_url': 'https://example.com/avatar.png'
+#     }
 
 if __name__ == '__main__':
     

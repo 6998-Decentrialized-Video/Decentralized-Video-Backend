@@ -203,7 +203,6 @@ class MongoDBWrapper:
             "timestamp": datetime.now(),
             "replies": []  # Initialize empty list for replies
         }
-        print("mongo", comment)
         
         # If it's a reply to an existing comment
         if parent_comment_id:
@@ -243,6 +242,12 @@ class MongoDBWrapper:
         comments = video.get("comments", [])
         if not comments:
             return []  # Return an empty list if no comments exist
+        
+        for comment in comments:
+            comment['_id'] = str(comment['_id'])
+            for reply in comment.get('replies', []):
+                reply['_id'] = str(reply['_id'])
+    
         
         sorted_comments = sorted(comments, key=lambda x: x.get("timestamp", datetime.min))
         return sorted_comments
