@@ -365,7 +365,6 @@ def add_comment():
     try:
        
         data = request.get_json()
-        print("comment added!!", data)
         if not data:
             return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
         video_cid = data.get('video_cid')
@@ -389,13 +388,10 @@ def add_comment():
 @app.route('/deleteComment', methods=['DELETE', 'POST'])
 def delete_comment():
     # mock_session()
-    print("deletinggg???")
     if 'coinbase_user' not in session:
         return redirect(url_for('login_coinbase'))
     try:
-        print('before data')
         data = request.get_json()
-        print("in delete", data)
         if not data:
             return jsonify({'error': 'Invalid request: No JSON data provided'}), 400
         
