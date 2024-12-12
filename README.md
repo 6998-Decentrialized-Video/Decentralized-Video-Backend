@@ -28,8 +28,8 @@ Before you begin, ensure you have the following installed on your system:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/decentralized-video-backend.git
-cd decentralized-video-backend
+git clone https://github.com/yourusername/Decentralized-Video-Backend.git
+cd Decentralized-Video-Backend
 ```
 
 ### 2. Navigate to the Backend Directory
