@@ -16,7 +16,6 @@ This project is a backend implementation for a decentralized video platform. It 
 Before you begin, ensure you have the following installed on your system:
 
 - Python 3.8 or later
-- Node.js and NPM (if you have Node.js components)
 - IPFS (InterPlanetary File System)
 - MongoDB Atlas Account
 - MetaMask Wallet (for deploying contracts and testing)
@@ -60,13 +59,7 @@ Ensure you are in the `/backend` directory where `requirements.txt` is located.
 pip install -r requirements.txt
 ```
 
-### 5. Install Node.js Dependencies (If Applicable)
-If your project includes any Node.js components (like a frontend or IPFS interaction scripts), navigate to the respective directory and run:
-```bash
-npm install
-```
-
-### 6. Install IPFS
+### 5. Install IPFS
 Follow the instructions on the [IPFS Documentation](https://docs.ipfs.io/) to install IPFS on your system.
 
 #### Example for macOS (using Homebrew):
