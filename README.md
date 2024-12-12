@@ -10,7 +10,6 @@ This project is a backend implementation for a decentralized video platform. It 
 - [Running the Application](#running-the-application)
 - [Testing the Endpoints](#testing-the-endpoints)
 - [Troubleshooting](#troubleshooting)
-- [License](#license)
 
 ## Prerequisites
 
