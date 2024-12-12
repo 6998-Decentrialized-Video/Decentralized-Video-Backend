@@ -9,7 +9,6 @@ This project is a backend implementation for a decentralized video platform. It 
 - [Smart Contract Deployment](#smart-contract-deployment)
 - [Running the Application](#running-the-application)
 - [Testing the Endpoints](#testing-the-endpoints)
-- [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
@@ -264,51 +263,3 @@ curl -X POST http://127.0.0.1:8000/like \
 }
 ```
 
-## Troubleshooting
-
-### 1. SSL Handshake Failed (MongoDB Connection)
-#### Error Message:
-```yaml
-SSL handshake failed: [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error
-```
-
-#### Solution:
-- Ensure your `MONGODB_URI` is using `mongodb+srv://`.
-- Install the `certifi` package:
-  ```bash
-  pip install certifi
-  ```
-- Update the MongoDB client initialization in `mongo_wrapper.py`:
-  ```python
-  import certifi
-  self.client = MongoClient(uri, tlsCAFile=certifi.where())
-  ```
-
-### 2. Attribute Errors with Web3.py
-#### Error Messages:
-- `'Web3' object has no attribute 'toWei'`
-- `'SignedTransaction' object has no attribute 'rawTransaction'`
-
-#### Solution:
-- Import `to_wei` from `eth_utils`:
-  ```python
-  from eth_utils import to_wei
-  ```
-- Use `to_wei` instead of `Web3.toWei`:
-  ```python
-  'gasPrice': to_wei('20', 'gwei')
-  ```
-- Update attribute names to match Web3.py version 6.x:
-  - Use `raw_transaction` instead of `rawTransaction`:
-    ```python
-    tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
-    ```
-  - Use `transaction_hash` instead of `transactionHash` when accessing transaction receipt attributes:
-    ```python
-    tx_receipt.transaction_hash.hex()
-    ```
-
-### 3. Session Not Being Maintained
-If you're being redirected to the login page when trying to access protected endpoints:
-- Ensure you have a valid session or use token-based authentication.
-- For API testing, consider disabling authentication checks temporarily or implement token-based authentication.
